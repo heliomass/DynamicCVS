@@ -1,0 +1,302 @@
+#!/usr/bin/env python2.6
+# -*- coding: utf-8 -*-
+
+# Sympathetic CVS
+#
+# Possible alternate names:
+#    Sympathetic CVS
+#    Supportive CVS
+#    Fab CVS
+#    CVS Boost
+#    Amplified CVS
+
+import sys
+import re
+import hashlib
+import os.path
+from subprocess import call
+from tempfile import TemporaryFile;
+
+# Static variables
+cvs_dir_name = 'CVS'
+cvs_tag_file = 'CVS/Tag'
+cvs_entries_file = 'CVS/Entries'
+checksum_file = '.cvs_checksum'
+
+# Output symbols
+cvs_symbol_unknown = "？"
+cvs_symbol_current = ''
+cvs_symbol_outdated = "✗ "
+# TODO - Get these from the environment if they exist
+
+#test_mode = True
+test_mode = False
+
+def log(text):
+
+	if test_mode:
+		print text
+
+# Does the current directory have CVS content?
+def has_cvs():
+
+	if os.path.isdir(cvs_dir_name):
+		return True
+
+	else:
+		return False
+
+
+def has_checksum_file():
+
+	if os.path.isfile(checksum_file):
+		return True
+
+	else:
+		return False
+
+
+# Returns the name of the current branch.
+def branchname():
+
+	if has_cvs():
+		if os.path.isfile(cvs_tag_file):
+			f = open(cvs_tag_file, 'r')
+			tag = f.read()[1:]
+			sys.stdout.write(tag)
+			f.close()
+		else:
+			sys.stdout.write('MAIN')
+		return True
+
+	else:
+		return False
+
+
+# Derives a list of all files in the current directory which have entries in CVS
+def get_list( file_list=[], current_directory=None ):
+
+	if current_directory is None:
+
+		current_directory = ''
+
+	if not os.path.isfile(current_directory + cvs_entries_file):
+		return file_list
+
+	f = open(current_directory + cvs_entries_file, 'r')
+
+	for line in f:
+
+		if line[0:1] == 'D':
+
+			if len(line) > 0:
+
+				# Directory, so drill down
+				file_list = get_list(file_list, line[1:].strip('\n').strip('/') + '/')
+
+		else:
+
+			# Regular file
+			file_name = current_directory + re.search('^([A-Za-z0-9._-]+)', line[1:]).group(0)
+			if os.path.isfile(file_name):
+				file_list.append(file_name)
+
+	f.close()
+
+	return file_list
+
+
+# Produces a single hash for all files provided in a list
+def make_hash ( file_list ):
+
+	hash = ''
+
+	for file in file_list:
+
+		f = open(file, 'r')
+
+		r = f.read()
+
+		# TODO - We need to ignore CVS tags within the files, eg: $Id$, $Header$, etc.
+
+		sha1Hash = hashlib.sha1(r)
+		sha1Hashed = sha1Hash.hexdigest()
+
+		hash = hashlib.sha1(hash + sha1Hashed).hexdigest()
+
+		f.close()
+
+	return hash
+
+
+# Writes a hash for all CVS registered files under the current directory
+def write_hash ():
+
+	# TODO - The hash should be generated for each sub-directory
+
+	log ("Making hash...")
+	hash = make_hash( get_list() )
+	log ("Hash made: " + hash)
+
+	log ("Writing to " + checksum_file)
+	f = open(checksum_file, 'w')
+	f.write(hash)
+	f.close()
+
+
+def read_hash ():
+
+	f = open(checksum_file, 'r')
+	hash = f.readline()
+	f.close()
+
+	return hash
+
+
+# Compare hash.
+def compare_hash ():
+
+	hash_previous = read_hash()
+	hash_current = make_hash( get_list() )
+
+	log ('1:' + hash_previous)
+	log ('2:' + hash_current)
+
+	if hash_previous == hash_current:
+		return True
+	else:
+		return False
+
+# Used for when we know there are uncommitted files
+def write_null_hash ():
+
+	f = open(checksum_file, 'w')
+	f.write('0000000000000000000000000000000000000000')
+	f.close()
+
+
+# Check uncommitted
+#
+# Reults are:
+#
+#    0 - No CVS data
+#    1 - No hash available for comparison
+#    2 - All up to date
+#    3 - Uncommitted files
+#
+def uncommitted ():
+
+	if not has_cvs():
+		return True
+
+	elif not has_checksum_file():
+		print cvs_symbol_unknown
+		return True
+
+	elif compare_hash():
+		print cvs_symbol_current
+		return True
+
+	else:
+		print cvs_symbol_outdated
+		return True
+
+
+def do_update (cvs_cmd):
+
+	log ("Doing update...")
+
+	f = TemporaryFile(mode='r+')
+	#f = open('/space/ddemby/scratch/test.tmp', 'r+')
+
+	cvs_cmd.insert(0, 'cvs')
+
+	ret = call(cvs_cmd, stdout=f)
+	#ret = call(cvs_cmd)
+
+	f.seek(0)
+	print f.read()
+
+	if (ret == 0):
+		success = True
+
+		# Is everything committed?
+		f.seek(0)
+		#number_uncommited_files = sum(1 for _ in f)
+		number_uncommited_files = 0
+		# TODO - Have th eoutput piped to stdout rather than waiting for the operation to complete.
+		for line in f:
+			if (line[:1] == 'M' or line[:1] == 'C' or line[:1] == 'A'):
+				number_uncommited_files = number_uncommited_files + 1
+		log (str(number_uncommited_files) + " files uncommitted.")
+		if number_uncommited_files == 0:
+			write_hash()
+		else:
+			write_null_hash()
+
+	else:
+		success = False
+
+
+	f.close()
+
+	return success
+
+
+success = False
+do_exec = False
+
+# Argument parsing
+if len(sys.argv) > 1:
+
+	command = ""
+	for command in sys.argv[1:]:
+		if command[0] != '-':
+			break
+
+	#command = sys.argv[1]  # TODO: This doesn't take notice of the regular switches!
+
+	# Special case, we want to utilise the exit status for checking the presence of CVS
+
+	# Pre-hooks
+	if command == 'has':
+		success = has_cvs()
+	elif command == 'branchname':
+		success = branchname()
+	elif command == 'uncommitted':
+		success = uncommitted()
+	elif (command == 'update' or command == 'upd'):
+		# TODO - Only do this if we're actually doing a "for real" update.
+		success = do_update(sys.argv[1:])
+	else:
+		do_exec = True
+
+else:
+	do_exec = True
+
+if do_exec:
+	cvs_cmd = sys.argv[1:]
+	cvs_cmd.insert(0, 'cvs')
+
+	ret = call (cvs_cmd)
+	if (ret == 0):
+		success = True
+
+
+# Post hooks
+
+# TODO - Only do this if the cvs command was successful
+if success:
+	if (command == 'commit' or command == 'ci'):
+		# TODO - What if not all changes are committed?
+		log ("... Done commit.")
+		success = write_hash()
+
+
+if success:
+	log ("I was successful.")
+	sys.exit(0)
+else:
+	log ("I was a failure.")
+	sys.exit(1)
+
