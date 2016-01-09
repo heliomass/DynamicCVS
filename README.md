@@ -1,10 +1,10 @@
-# Amplified CVS
-Amplified CVS aims to bring some command line features of Git to CVS.
+# Dynamic CVS
+Dynamic CVS aims to bring some command line features of Git to CVS.
 
 ## What is It?
 Since I have to work with CVS on a daily basis, this project was born out of general frustration with some of its limitations, especially the constant need to contact the CVS server for nearly all operations.
 
-Amplified CVS aims to draw inspiration from Git by providing you with the following information without the need to hit the server each time:  
+Dynamic CVS aims to draw inspiration from Git by providing you with the following information without the need to hit the server each time:  
 - Am I in a CVS directory?  
 - What branch am I on?  
 - Are there any uncommitted files?
@@ -15,7 +15,7 @@ You can then use this information to display information about the current direc
 cvs:(MY_CVS_BRANCH) ✗
 ```
 
-Amplified CVS has an expandable hook system, meaning new commands can be added in the future, and existing commands can have extra functionality added either prior to or after their execution.
+Dynamic CVS has an expandable hook system, meaning new commands can be added in the future, and existing commands can have extra functionality added either prior to or after their execution.
 
 ## Usage
 ### Step 1: Clone the Repository and Set Up the Path
@@ -50,7 +50,7 @@ Note that when entering a directory for the first time with Dynamic CVS, a quest
 Also, running `cvs has` will tell you if there's CVS data in the current directory by means of an exit code (0 if there is, 1 if not).
 
 ## How Does it Work?
-Amplified CVS works by keeping a hash of the file structure for the current directory and its children. It does this in two ways.
+Dynamic CVS works by keeping a hash of the file structure for the current directory and its children. It does this in two ways.
 
 Firstly, it creates hooks around CVS commands like `update` and `commit`. These hooks update the hash as necessary to reflect the state of the remote repository on the server.
 
@@ -59,13 +59,13 @@ Secondly, new commands like `cvs uncommitted` uses these hashes to compare the c
 Dynamic CVS can also show you the current branch name without needing to contact the server based on local information that CVS stores.
 
 ## Outstanding Items
-Amplified CVS is a work in progress. Below is a list of to-do items which are needed to improve the experience.
+Dynamic CVS is a work in progress. Below is a list of to-do items which are needed to improve the experience.
 
 - Depending on the number of files in the directory, the hash can take a moment to calculate resulting in a perceivable delay to your prompt when in a CVS directory.  
 - Configurable symbols from the environment (eg: an alternative to "✗" for uncommitted files)  
 - Ignore CVS tags within files (eg: `$Id$` and `$Header$`) since these can change without the file needing to be recommitted.  
 - Running `cvs update` should set up all subdirectories for Dynamic CVS.   Currently if you jump into a sub-directory, you may need to run `cvs update` manually to get the latest info.  
 - Enable a pipe for the `cvs update` hook. Currently there's no screen output to stdout until the cvs command has completed, which doesn't make for a great user experience.  
-- When running a CVS command as a dry run (ie: `cvs -n ...`) we shouldn't update any of Amplified CVS' info.  
+- When running a CVS command as a dry run (ie: `cvs -n ...`) we shouldn't update any of Dynamic CVS' info.  
 - If you commit only some changes files, Dynamic CVS doesn't handle this situation particularly gracefully.
 - Checking out a repository should initialise Dynamic CVS.
